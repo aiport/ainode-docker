@@ -23,10 +23,6 @@
 - [Installing The Image](#installing-the-image)
 - [Running the Container](#running-the-container)
 - [Environment Variables](#environment-variables)
-- [Connecting to the AI Node Panel](#connecting-to-the-ai-node-panel)
-- [Available Routes and Endpoints](#available-routes-and-endpoints)
-- [Docker Operations](#docker-operations)
-- [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -59,5 +55,30 @@ docker pull nsss651u/ainode:<latest_tag>
 Use the following command to make a container
 
 ```shell
-docker run --privileged -e port=<port> -p <port>:<port> nsss651u/ainode:1.0.1-alpha
+docker run --privileged -e port=<port> -p <port>:<port> nsss651u/ainode:<version>
 ```
+
+**The above will help to create a new container for hosting the node**
+
+⚠️ Remember to change **port** to your desired port. Eg: 2000, 3000, 4000, 8000
+
+⚠️ Remember to change **version** to latest version.
+
+## Enviroment Variables
+
+**SPORT** (optional): Used to define server port. Leaving it empty results in default port i.e. 3000
+
+## Contribution
+
+Any contribution is always welcomed. Read More about contribution in Contribution.md
+
+## License
+
+This project is licensed under **apache-2.0**
+
+## External Modules Used
+
+[@xterm/xterm](https://www.npmjs.com/package/@xterm/xterm) - License: **[MIT](https://github.com/xtermjs/xterm.js/blob/master/LICENSE)**
+
+
+
