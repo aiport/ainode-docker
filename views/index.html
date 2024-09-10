@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create The Configuration</title>
+    <link rel="shortcut icon" href="/logo-dark.png" type="image/x-icon">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div id="message"></div>
+        <h1>Create The Configuration</h1>
+        <form action="" method="post" id="configForm">
+            <label for="secret_key">Secret Key:</label>
+            <input type="text" id="secret_key" name="secret_key"  required><br>
+
+            <label for="port">Port:</label>
+            <input type="text" id="port" name="port"  required><br>
+
+            <label for="log_file">Log File Path:</label>
+            <input type="text" id="log_file" name="log_file"  required><br>
+
+            <label for="runtime">Runtime:</label>
+            <input type="text" id="runtime" name="runtime" value="production" disabled required><br>
+
+            <label for="panel_url">Panel URL:</label>
+            <input type="url" id="panel_url" name="panel_url"  required><br>
+
+            <label for="server_url">Server URL:</label>
+            <input type="url" id="server_url" name="server_url"  required><br>
+
+            <button type="submit">Create Config</button>
+        </form>
+    </div>
+</body>
+<script>
+       document.getElementById('configForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            // Get form data
+            const formData = {
+                secret_key: document.getElementById('secret_key').value,
+                port: document.getElementById('port').value,
+                log_file: document.getElementById('log_file').value,
+                runtime: document.getElementById('runtime').value,
+                panel_url: document.getElementById('panel_url').value,
+                server_url: document.getElementById('server_url').value
+            };
+
+            console.log(JSON.stringify(formData));
+            // Send data via fetch
+            fetch('/create-config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Config created successfully');
+                location.reload()
+                const messageDiv = document.getElementById('message');
+                if (data.message) {
+                    messageDiv.textContent = data.message;
+                    messageDiv.style.color = data.message.includes('already exists') ? 'red' : 'green';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
+</html>

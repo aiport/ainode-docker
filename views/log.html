@@ -1,0 +1,39 @@
+<!doctype html>
+  <html>
+    <head>
+      <link rel="stylesheet" href="/xterm.css" />
+      <script src="xterm.js"></script>
+
+    </head>
+    <body>
+      <div id="terminal"></div>
+      <script>
+        var term = new Terminal({
+            cols:150,
+            rows: 35
+        });
+        term.open(document.getElementById('terminal'));
+        window.addEventListener('resize', () => {
+      term.fit(); // Use fit addon for automatic resizing (install separately)
+    });
+        //get logs from get-logs route
+        //clear the terminal first
+        fetch('/get-logs')
+          .then(response => response.text())
+          .then(data => {
+            term.write(data);
+          });
+        setInterval(function(){
+          term.clear();
+          fetch('/get-logs')
+          .then(response => response.text())
+          .then(data => {
+            term.write(data);
+          });
+        }, 5000);
+
+         
+      </script>
+    </body>
+
+  </html>
