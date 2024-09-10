@@ -9,6 +9,12 @@ const os = require('os');
 const db = require('../../runners/db');
 const axios = require('axios');
 const e = require('express');
+const rateLimit = require('express-rate-limit');
+const FileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Limit each IP to 10 requests per minute
+    message: 'Too many requests, please try again after a minute.'
+});
 process.env.dockerSocket = process.platform === "win32" ? "//./pipe/docker_engine" : "/var/run/docker.sock";
 const docker = new Docker({ socketPath: process.env.dockerSocket });
 docker.ping().then(() => {
@@ -17,7 +23,7 @@ docker.ping().then(() => {
     console.log(chalk.bold.red('Docker is not running on your machine!'));
 });
 
-router.post('/create', async (req, res) => {
+router.post('/create',FileLimiter, async (req, res) => {
     console.log(chalk.bold.green('A new container creation request has been received! \n Checking if request is authorized...'));
     if(!req.headers.authorization) return res.status(401).json({ error: 'Unauthorized' });
     if(req.headers.authorization !== `Bearer ${config.secret_key}`) return res.status(401).json({ error: 'Wrong Key' });
@@ -132,7 +138,7 @@ router.post('/create', async (req, res) => {
         }
 });
 
-router.delete('/delete/:id', async (req, res) => {
+router.delete('/delete/:id',FileLimiter, async (req, res) => {
     const id = req.params.id;
     const headers = req.headers;
     console.log(chalk.bold.green(`A request to delete container ${id} has been received! \n Checking if request is authorized...`));

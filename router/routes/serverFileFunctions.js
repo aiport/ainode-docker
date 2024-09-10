@@ -5,6 +5,12 @@ const multer = require('multer');
 const upload = multer({ dest: 'server/' });
 const path = require('path');
 const config = require('../../config.json');
+const rateLimit = require('express-rate-limit');
+const FileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Limit each IP to 10 requests per minute
+    message: 'Too many requests, please try again after a minute.'
+});
 function isSafePath(base, target) {
     const fullPath = path.resolve(base, target);
     if (!fullPath.startsWith(base)) {
@@ -12,11 +18,12 @@ function isSafePath(base, target) {
     }
     return fullPath;
 }
+
 function isEditable(file) {
     const editableExtensions = ['.txt', '.json', '.js', '.html', '.css', '.md',''];
     return editableExtensions.includes(path.extname(file).toLowerCase());
 }
-router.get('/:id/files', async (req, res) => {
+router.get('/:id/files',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const id = req.params.id;
@@ -43,7 +50,7 @@ router.get('/:id/files', async (req, res) => {
         }
     }
 });
-router.get('/:id/files/view/:filename', async (req, res) => {
+router.get('/:id/files/view/:filename',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, filename } = req.params;
@@ -73,7 +80,7 @@ router.get('/:id/files/view/:filename', async (req, res) => {
     }
 });
 
-router.post('/:id/files/upload', upload.array('files'), async (req, res) => {
+router.post('/:id/files/upload', upload.array('files'),FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id } = req.params;
@@ -95,7 +102,7 @@ router.post('/:id/files/upload', upload.array('files'), async (req, res) => {
     }
 });
 
-router.post('/:id/files/edit/:filename', async (req, res) => {
+router.post('/:id/files/edit/:filename',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, filename } = req.params;
@@ -124,7 +131,7 @@ router.post('/:id/files/edit/:filename', async (req, res) => {
     }
 });
 
-router.post('/:id/files/create/:filename', async (req, res) => {
+router.post('/:id/files/create/:filename',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, filename } = req.params;
@@ -150,7 +157,7 @@ router.post('/:id/files/create/:filename', async (req, res) => {
 });
 
 
-router.post('/:id/folders/create/:foldername', async (req, res) => {
+router.post('/:id/folders/create/:foldername',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, foldername } = req.params;
@@ -159,7 +166,15 @@ router.post('/:id/folders/create/:foldername', async (req, res) => {
 
     try {
         const fullPath = isSafePath(volumePath, subPath);
-        const targetFolderPath = path.join(fullPath, foldername);
+    
+        // Resolve target folder path
+        const targetFolderPath = path.resolve(fullPath, foldername);
+    
+        // Ensure the resolved path stays within the intended volumePath
+        if (!targetFolderPath.startsWith(fullPath)) {
+            return res.status(400).json({ message: 'Invalid folder path' });
+        }
+    
         await fs.mkdir(targetFolderPath, { recursive: true });
         res.json({ message: 'Folder created successfully' });
     } catch (err) {
@@ -169,8 +184,9 @@ router.post('/:id/folders/create/:foldername', async (req, res) => {
             res.status(500).json({ message: err.message });
         }
     }
+    
 });
-router.delete('/:id/files/delete/:filename', async (req, res) => {
+router.delete('/:id/files/delete/:filename',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, filename } = req.params;

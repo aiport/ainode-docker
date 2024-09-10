@@ -2,10 +2,15 @@ const express = require('express');
 process.env.dockerSocket = process.platform === "win32" ? "//./pipe/docker_engine" : "/var/run/docker.sock";
 const router = express.Router();
 const Docker = require('dockerode');
-
+const rateLimit = require('express-rate-limit');
+const FileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Limit each IP to 10 requests per minute
+    message: 'Too many requests, please try again after a minute.'
+});
 const docker = new Docker({ socketPath: process.env.dockerSocket });
 
-router.post('/api/server/:id/:process', async (req, res) => {
+router.post('/api/server/:id/:process',FileLimiter, async (req, res) => {
     const auth = req.headers.authorization;
     if(!auth == `Bearer ${config.secret_key}`) return res.status(401).json({ message: `Unauthorized`})
     const { id, process } = req.params;

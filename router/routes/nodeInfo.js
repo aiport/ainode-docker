@@ -2,8 +2,13 @@ const express = require('express');
 const chalk = require('chalk');
 const router = express.Router();
 const config = require('../../config.json')
-
-router.get('/get', (req, res) => {
+const rateLimit = require('express-rate-limit');
+const FileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // Limit each IP to 10 requests per minute
+    message: 'Too many requests, please try again after a minute.'
+});
+router.get('/get',FileLimiter, (req, res) => {
     const headers = req.headers;
     if(!headers.authorization) return res.status(401).json({ error: 'Unauthorized' });
     if(headers.authorization !== `Bearer ${config.secret_key}`) return res.status(401).json({ error: 'Unauthorized' });
