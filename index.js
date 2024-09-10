@@ -17,6 +17,12 @@ const file = require('./router/routes/serverFileFunctions')
 const nodeInfo = require('./router/routes/nodeInfo');
 const { exec } = require('child_process');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
+const FileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 60, // Limit each IP to 10 requests per minute
+    message: 'Too many requests, please try again after a minute.'
+});
 let srv;
 let portServer = process.env.SPORT | 3000;
 app.use(cors({
@@ -174,7 +180,7 @@ ws.on('connection', (socket) => {
 
 
 // HTML form route
-app.get('/', (req, res) => {
+app.get('/', FileLimiter,(req, res) => {
     const conf = require('./config.json');
     // Check if config.json already exist
     if(conf.secret_key && conf.port && conf.log_file && conf.runtime && conf.panel_url && conf.server_url){
@@ -183,14 +189,14 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '/views/index.html'));
 });
 
-app.get('/logs', (req, res) => {
+app.get('/logs',FileLimiter, (req, res) => {
     const conf = require('./config.json');
     if(!conf.log_file){
         return res.status(404).send('Log file not found');
     }
     res.sendFile(path.join(__dirname, '/views/log.html'));
 });
-app.get('/get-logs', (req, res) => {
+app.get('/get-logs', FileLimiter,(req, res) => {
     const conf = require('./config.json');
     if(!conf.log_file){
         return res.status(404).send('Log file not found');
@@ -205,7 +211,7 @@ app.get('/get-logs', (req, res) => {
 });
 
 // Route to handle form submission and create config.json
-app.post('/create-config', (req, res) => {
+app.post('/create-config', FileLimiter,(req, res) => {
   const configFilePath = path.join(__dirname, 'config.json');
   const conf = require('./config.json');
   // Check if config.json already exist
@@ -231,7 +237,7 @@ app.post('/create-config', (req, res) => {
 });
 
 // 404 Page
-app.use((req, res) => {
+app.use(FileLimiter,(req, res) => {
     const conf = require('./config.json');
     if(conf.secret_key && conf.port && conf.log_file && conf.runtime && conf.panel_url && conf.server_url){
       res.status(404).send('The config has not been created yet. Please create the config file first bu going here: <a href="/">Create Config</a>');
