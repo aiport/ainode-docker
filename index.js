@@ -4,6 +4,7 @@ const http = require('http');
 const config = require('./config');
 const app = express();
 const os = require('os');
+const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const server = http.createServer(app);
 const ws = new wss.Server({ server });
@@ -87,12 +88,10 @@ app.get('/ping', (req, res) => {
 
 function splitString(str) {
     const parts = str.split(':');
-    if (parts.length !== 2) {
+    if (parts.length <2) {
       throw new Error('Invalid format. String should be in the format "string1:string2"');
     }
-    const string1 = parts[0].trim();
-    const string2 = parts[1].trim();
-    return { string1, string2 };
+    return parts;
 }
 //check if docker is running or not.
 if(!config.runtime == "build"){
@@ -107,22 +106,50 @@ app.use('/server', deploy);
 app.use('/server', info);
 app.use('/server', power);  
 app.use('/server', file);
+const wsRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60, // limit each socket to 10 messages per minute
+    message: 'Too many requests, please try again later.',
+});
 app.use('/node', nodeInfo);
+// WebSocket connection handler
 ws.on('connection', (socket) => {
-    console.log('Client connected ');
+    console.log('Client connected');
+
+    // Apply rate limiter for this WebSocket connection
+      socket.on('error', (error) => {
+        console.error('WebSocket error:', error.message);
+    });
+
+    // Handle when the client disconnects
+    socket.on('close', (code, reason) => {
+        console.log(`WebSocket connection closed. Code: ${code}, Reason: ${reason}`);
+    });
+
+
     socket.on('message', (message) => {
         message = message.toString('utf8');
-        //auth:password - cmd
         const [auth, cmd] = message.split('-');
-        console.log(auth)
-        console.log(cmd.trim())
-        console.log(config.secret_key)
-        if(auth.trim() === `auth:${config.secret_key}`){
-            console.log('Authenticated');
-            socket.send('Authenticated');
-            if(!cmd) return;
-            const { string1, string2 } = splitString(cmd.trim());
-            switch(string1){
+        if (!auth || !cmd) {
+            socket.send('Invalid message format');
+            return;
+        }
+
+        console.log('Received:', auth, cmd);
+
+        // Verify token
+        try {
+            // Split and validate command
+            const string1 = splitString(cmd.trim())[0];
+            const string2 = splitString(cmd.trim())[1];
+            console.log(splitString(cmd.trim()))
+            if (!string1 || !string2) {
+                socket.send('Invalid command');
+                return;
+            }
+
+            // Handle Docker commands securely
+            switch (string1) {
                 case 'start':
                     docker.getContainer(string2).start().then(() => {
                         socket.send(`Container ${string2} started`);
@@ -135,6 +162,7 @@ ws.on('connection', (socket) => {
                         socket.send(`Container ${string2} stopped`);
                     }).catch((err) => {
                         socket.send(`Error stopping container ${string2}`);
+                        console.log(err)
                     });
                     break;
                 case 'restart':
@@ -151,25 +179,40 @@ ws.on('connection', (socket) => {
                         socket.send(`Error killing container ${string2}`);
                     });
                     break
+                case 'logs':
+                    docker.getContainer(string2).logs({ follow: true, stdout: true, stderr: true }).then((stream) => {
+                        stream.on('data', (chunk) => {
+                            socket.send(chunk.toString('utf8'));
+                        });
+                    }).catch((err) => {
+                        socket.send(`Error getting logs for container ${string2}`);
+                    });
+                    break;
                 case 'exec':
-                    docker.getContainer(string2).exec({ Cmd: [string2] }).then((exec) => {
+                    const string3 = splitString(cmd.trim())[2];
+                    //execute cmd i container using sh
+                    docker.getContainer(string2).exec({ Cmd: ['sh','-c',string3], AttachStdout: true, AttachStderr: true }, (err, exec) => {
+                        if (err) {
+                            socket.send(`Error executing command in container ${string2}: ${err.message}`);
+                            return;
+                        }
                         exec.start({ hijack: true, stdin: true }, (err, stream) => {
                             if (err) {
-                                socket.send(`Error executing command on container ${string2}`);
+                                socket.send(`Error executing! command in container ${string2}: ${err.message}`);
+                                return;
                             }
                             stream.on('data', (chunk) => {
                                 socket.send(chunk.toString('utf8'));
                             });
                         });
-                    }).catch((err) => {
-                        socket.send(`Error executing command on container ${string2}`);
                     });
                     break;
                 default:
                     console.log('Not a valid action')
+                    socket.send('Invalid action');
             }
-        }else{
-            socket.send('Not authenticated');
+        } catch (err) {
+            socket.send('Authentication failed');
         }
     });
 });
@@ -247,31 +290,37 @@ app.use(FileLimiter,(req, res) => {
   
 });
 let isServerOnline = false;
-
+let isMsgSent = false;
 const port = portServer;
     if(config.runtime == "build"){
-        srv = server.listen(port,'0.0.0.0', () => {
+        srv = server.listen(port, () => {
             console.log(`Server running on http://${getIPAddress()}:${port}`);
         });
     }else{
         setInterval(function (){
             docker.ping().then(() => {
                if(!isServerOnline){
-                srv = server.listen(port,'0.0.0.0', () => {
+                srv = server.listen(port, () => {
                     console.log('Docker is running');
                     console.log(`Server running on port\n \n You can access it locally on: http://${getIPAddress()}:${port}`);
                     isServerOnline = true;
+                    isMsgSent = false;
                 });
                }
             }).catch((err) => {
                 if(isServerOnline){
-                    isServerOnline = false;
+                    if(!isMsgSent){
+                        isServerOnline = false;
                     console.log('Docker is not running or docker has crashed due to some reasons.');
                     console.log('Please restart the Docker and try again');
-                    process.exit(1);
+                    isMsgSent = true;
+                    }
                 }else{
+                    if(!isMsgSent){
+                        isMsgSent = true;
                     console.log('Docker is not running or docker has crashed due to some reasons.');
                     console.log('Please restart the Docker and try again');
+                    }
                 }
             });
         }, 2000);
